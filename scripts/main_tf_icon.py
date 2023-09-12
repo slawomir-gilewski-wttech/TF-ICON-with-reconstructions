@@ -288,6 +288,7 @@ def main():
     batch_size = opt.n_samples
     sample_path = os.path.join(outpath, file_name)
     os.makedirs(sample_path, exist_ok=True)
+    os.makedirs(os.path.join(sample_path, "ref"), exist_ok=True)
     base_count = len(os.listdir(sample_path))
 
     config = OmegaConf.load(opt.config)
@@ -487,7 +488,7 @@ def main():
                             mask = torch.zeros_like(z_enc, device=device)
                             mask[:, :, param[0]:param[1], param[2]:param[3]] = 1
                                                 
-                            samples, _ = sampler.sample(steps=opt.dpm_steps,
+                            samples, _, ref_reconstructed = sampler.sample(steps=opt.dpm_steps,
                                                         inv_emb=inv_emb,
                                                         conditioning=c,
                                                         batch_size=opt.n_samples,
@@ -514,16 +515,24 @@ def main():
                             x_samples = model.decode_first_stage(samples)
                             x_samples = torch.clamp((x_samples + 1.0) / 2.0, min=0.0, max=1.0)
                             
+                            decoded_refs = model.decode_first_stage(ref_reconstructed)
+                            decoded_refs = torch.clamp((decoded_refs + 1.0) / 2.0, min=0.0, max=1.0)
+
                             T2 = time.time()
                             print('Running Time: %s s' % ((T2 - T1)))
                             
-                            for x_sample in x_samples:
+                            for x_sample, decoded_ref in zip(x_samples, decoded_refs):
                                 x_sample = 255. * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
                                 img = Image.fromarray(x_sample.astype(np.uint8))
-                                img.save(os.path.join(sample_path, f"{base_count:05}_{prompts[0]}.png"))
+                                img.save(os.path.join(sample_path, f"{prompts[0]}_{base_count:05}.png"))
+
+                                decoded_ref = 255. * rearrange(decoded_ref.cpu().numpy(), 'c h w -> h w c')
+                                img = Image.fromarray(decoded_ref.astype(np.uint8))
+                                img.save(os.path.join(sample_path, "ref", f"{prompts[0]}_{base_count:05}.png"))
+
                                 base_count += 1
 
-                del x_samples, samples, z_enc, z_ref_enc, samples_orig, samples_for_cross, samples_ref, mask, x_sample, img, c, uc, inv_emb
+                del decoded_refs, ref_reconstructed, x_samples, samples, z_enc, z_ref_enc, samples_orig, samples_for_cross, samples_ref, mask, x_sample, img, c, uc, inv_emb
                 del param, segmentation_map, top_rr, bottom_rr, left_rr, right_rr, target_height, target_width, center_row_rm, center_col_rm
                 del init_image, init_latent, save_image, ref_image, ref_latent, prompt, prompts, data, binary, contours
 

@@ -189,12 +189,12 @@ class DPMSolverSampler(object):
                 cross['x'] = orig['x']
                 cross = dpm_solver_decode.sample_one_step(cross, step, steps, order=order, DPMencode=DPMencode, ref_init=ref['x'].clone())
                                 
+                # decoded reference
+                ptp_utils.register_attention_control(self.model, ref_controller, center_row_rm, center_col_rm, target_height, target_width, 
+                                                     width, height, top, left, bottom, right, segmentation_map=segmentation_map[0, 0].clone())
+                ref = dpm_solver_decode.sample_one_step(ref, step, steps, order=order, DPMencode=DPMencode)
                 if step < int(tau_a*(steps) + 1 - order):
                     inject = True
-                    # decoded reference
-                    ptp_utils.register_attention_control(self.model, ref_controller, center_row_rm, center_col_rm, target_height, target_width, 
-                                                         width, height, top, left, bottom, right, segmentation_map=segmentation_map[0, 0].clone())
-                    ref = dpm_solver_decode.sample_one_step(ref, step, steps, order=order, DPMencode=DPMencode)
                     controller = [orig_controller, ref_controller, cross_controller]
                 else:
                     inject = False
@@ -217,7 +217,7 @@ class DPMSolverSampler(object):
                     gen['x'] = blended.clone()      
                       
             del orig_controller, ref_controller, cross_controller, gen_controller, controller
-            return gen['x'].to(device), None
+            return gen['x'].to(device), None, ref['x'].to(device)
             
     
     def low_order_sample(self, x, dpm_solver, steps, order, t_start, t_end, device, DPMencode=False, controller=None, inject=False, ref_init=None):
